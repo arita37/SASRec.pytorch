@@ -30,10 +30,8 @@ class SASRec(torch.nn.Module):
         self.item_num = item_num
         self.dev = args.device
 
-        # TODO: loss += args.l2_emb for regularizing embedding vectors during training
-        # https://stackoverflow.com/questions/42704283/adding-l1-l2-regularization-in-pytorch
         self.item_emb = torch.nn.Embedding(self.item_num+1, args.hidden_units, padding_idx=0)
-        self.pos_emb = torch.nn.Embedding(args.maxlen, args.hidden_units) # TO IMPROVE
+        self.pos_emb = torch.nn.Embedding(args.maxlen+1, args.hidden_units, padding_idx=0)
         self.emb_dropout = torch.nn.Dropout(p=args.dropout_rate)
 
         self.attention_layernorms = torch.nn.ModuleList() # to be Q for self-attention
@@ -64,7 +62,12 @@ class SASRec(torch.nn.Module):
     def log2feats(self, log_seqs):
         seqs = self.item_emb(torch.LongTensor(log_seqs).to(self.dev))
         seqs *= self.item_emb.embedding_dim ** 0.5
-        positions = np.tile(np.array(range(log_seqs.shape[1])), [log_seqs.shape[0], 1])
+        positions = np.zeros(log_seqs.shape)
+        full_pos = np.array(range(1, log_seqs.shape[1]+1))
+        real_item_nums = (log_seqs != 0).sum(axis=1)
+        for i in range(log_seqs.shape[0]):
+            rin = real_item_nums[i]
+            positions[i, -rin:] = full_pos[:rin]
         seqs += self.pos_emb(torch.LongTensor(positions).to(self.dev))
         seqs = self.emb_dropout(seqs)
 
